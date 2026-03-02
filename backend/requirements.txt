@@ -1,5 +1,8 @@
 fastapi
 uvicorn
-pillow
+pymongo
+python-jose
+passlib[bcrypt]
 google-generativeai
+pillow
 python-multipart
