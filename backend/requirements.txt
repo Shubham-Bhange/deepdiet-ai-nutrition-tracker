@@ -3,6 +3,6 @@ uvicorn
 pymongo
 python-jose
 passlib[bcrypt]
-google-generativeai
+google-genai
 pillow
 python-multipart
