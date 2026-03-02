@@ -264,3 +264,7 @@ Reply in simple short friendly English.
     )
 
     return {"reply": response.text.strip()}
+
+@app.get("/")
+def root():
+    return {"status": "DeepDiet backend running"}
