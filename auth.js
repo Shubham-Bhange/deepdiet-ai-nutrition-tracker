@@ -3,9 +3,11 @@
 // =====================================================
 
 const API_BASE = "https://deepdiet-backend.onrender.com";
-
+const cors = require("cors");
 // ================= TOKEN =================
-
+app.use(cors({
+  origin: "https://deepdiet.onrender.com",
+}));
 function getToken() {
   return localStorage.getItem("token");
 }
