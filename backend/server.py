@@ -41,7 +41,7 @@ app.add_middleware(
     allow_origins=[
         "https://deepdiet.vercel.app",
         "http://localhost:5500",
-        "https://deepdiet-backend.onrender.com/"
+        "http://127.0.0.1:5500",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -49,7 +49,7 @@ app.add_middleware(
 )
 
 # =====================================================
-# DATABASE (MongoDB Atlas)
+# DATABASE
 # =====================================================
 
 mongo_client = MongoClient(MONGO_URL)
@@ -66,34 +66,30 @@ profiles_collection = db["profiles"]
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 # =====================================================
-# AUTH SYSTEM
+# AUTH SYSTEM (PBKDF2 - Stable)
 # =====================================================
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256"],
+    deprecated="auto"
+)
+
 security = HTTPBearer()
 
-def safe_password(password: str) -> str:
-    # bcrypt max limit = 72 bytes
-    if isinstance(password, str):
-        password = password.encode("utf-8")[:72]
-        return password.decode("utf-8", errors="ignore")
-    return password
-
 def hash_password(password: str):
-    password = safe_password(password)
     return pwd_context.hash(password)
 
 def verify_password(plain, hashed):
-    plain = safe_password(plain)
     return pwd_context.verify(plain, hashed)
 
 def create_access_token(data: dict):
     expire = datetime.utcnow() + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
-    data.update({"exp": expire})
-    return jwt.encode(data, JWT_SECRET, algorithm=ALGORITHM)
+    to_encode = data.copy()
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, JWT_SECRET, algorithm=ALGORITHM)
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
@@ -176,12 +172,14 @@ def login(req: LoginRequest):
     }
 
 # =====================================================
-# DISH SCAN ENDPOINT (Gemini Vision)
+# DISH SCAN (Gemini Vision)
 # =====================================================
 
 @app.post("/api/dish-scan")
-async def dish_scan(file: UploadFile = File(...), user_id: str = Depends(get_current_user)):
-
+async def dish_scan(
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user)
+):
     try:
         img_bytes = await file.read()
         image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
@@ -189,9 +187,7 @@ async def dish_scan(file: UploadFile = File(...), user_id: str = Depends(get_cur
         prompt = """
 You are a food nutrition AI.
 
-Analyze the image carefully.
-
-Return STRICT JSON only in this format:
+Return STRICT JSON only:
 
 {
   "meal_name": "string",
@@ -218,11 +214,7 @@ Return STRICT JSON only in this format:
   "health_score": number
 }
 
-Rules:
-- Estimate realistic Indian food portions.
-- If it is restaurant style, use dish_level = true.
-- Health score from 0 to 100.
-- DO NOT include any text outside JSON.
+No extra text.
 """
 
         response = client.models.generate_content(
@@ -247,7 +239,7 @@ Rules:
         raise HTTPException(status_code=500, detail=str(e))
 
 # =====================================================
-# HISTORY ENDPOINT
+# HISTORY
 # =====================================================
 
 @app.get("/api/history")
@@ -263,14 +255,17 @@ def get_history(user_id: str = Depends(get_current_user)):
     return scans
 
 # =====================================================
-# CHATBOT ENDPOINT
+# CHATBOT
 # =====================================================
 
 @app.post("/api/chat")
-def chat_with_ai(req: ChatRequest, user_id: str = Depends(get_current_user)):
+def chat_with_ai(
+    req: ChatRequest,
+    user_id: str = Depends(get_current_user)
+):
 
     prompt = f"""
-You are DeepDiet AI nutrition assistant.
+You are DeepDiet AI.
 
 User Question:
 {req.message}
@@ -278,7 +273,7 @@ User Question:
 Meal Context:
 {json.dumps(req.context)}
 
-Give short, clear, friendly advice.
+Give short, clear advice.
 """
 
     response = client.models.generate_content(
