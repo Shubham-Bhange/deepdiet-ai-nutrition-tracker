@@ -1,5 +1,5 @@
 // ======================================================
-// DeepDiet - Scan Page Logic
+// DeepDiet - Scan Page Logic (Backend Based)
 // ======================================================
 
 requireAuth();
@@ -23,9 +23,7 @@ if (logoutBtn) {
   });
 }
 
-// ================= API =================
-
-
+// ================= TOKEN =================
 function getToken() {
   return localStorage.getItem("token");
 }
@@ -59,14 +57,19 @@ function setFile(file) {
 }
 
 browseBtn.addEventListener("click", () => fileInput.click());
-fileInput.addEventListener("change", (e) => setFile(e.target.files[0]));
+
+fileInput.addEventListener("change", (e) => {
+  setFile(e.target.files[0]);
+});
 
 dz.addEventListener("dragover", (e) => {
   e.preventDefault();
   dz.classList.add("dragover");
 });
 
-dz.addEventListener("dragleave", () => dz.classList.remove("dragover"));
+dz.addEventListener("dragleave", () => {
+  dz.classList.remove("dragover");
+});
 
 dz.addEventListener("drop", (e) => {
   e.preventDefault();
@@ -88,6 +91,7 @@ resetBtn.addEventListener("click", () => {
 async function geminiDishScan(file) {
 
   const token = getToken();
+
   if (!token) {
     showToast("Session expired. Please login again.", "error");
     window.location.href = "login.html";
@@ -113,8 +117,9 @@ async function geminiDishScan(file) {
   }
 
   if (!res.ok) {
-    const msg = await res.text();
-    throw new Error(msg || "Backend error");
+    const errorText = await res.text();
+    console.error("Backend error:", errorText);
+    throw new Error(errorText || "Backend error");
   }
 
   return await res.json();
@@ -135,14 +140,13 @@ scanBtn.addEventListener("click", async () => {
 
     const dish = await geminiDishScan(currentFile);
 
-    // Save in localStorage (user-based)
-    const HISTORY_KEY = userKey("deepdiet_history");
-    const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+    if (!dish || !dish.id) {
+      showToast("Invalid scan response.", "error");
+      return;
+    }
 
-    history.unshift(dish);
-
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-    localStorage.setItem(userKey("deepdiet_current_scan"), dish.id);
+    // Store only current scan ID (NOT full history)
+    localStorage.setItem("deepdiet_current_scan", dish.id);
 
     showToast("Scan successful ✅", "success");
 
