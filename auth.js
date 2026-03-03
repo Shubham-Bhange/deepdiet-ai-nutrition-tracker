@@ -2,7 +2,7 @@
 // DeepDiet - JWT Authentication System
 // =====================================================
 
-const API_BASE = "https://deepdiet-backend.onrender.com";
+
 
 function getToken() {
   return localStorage.getItem("token");

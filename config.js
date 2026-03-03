@@ -1,0 +1,1 @@
+const API_BASE = "https://deepdiet-backend.onrender.com";
