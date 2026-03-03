@@ -1,3 +1,7 @@
+// ======================================================
+// DeepDiet - Dashboard (Backend Based)
+// ======================================================
+
 requireAuth();
 renderUserInfo();
 applyI18n();
@@ -20,15 +24,11 @@ if (logoutBtn) {
 }
 
 // ================= KEYS =================
-const HISTORY_KEY = userKey("deepdiet_history");
-const GOAL_KEY = userKey("deepdiet_goal");
-const WATER_GOAL_KEY = userKey("deepdiet_water_goal");
-const WATER_DATA_KEY = userKey("deepdiet_water_data");
+const GOAL_KEY = "deepdiet_goal";
+const WATER_GOAL_KEY = "deepdiet_water_goal";
+const WATER_DATA_KEY = "deepdiet_water_data";
 
-// ================= LOAD DATA =================
-const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-
-// ================= CALORIE ELEMENTS =================
+// ================= ELEMENTS =================
 const goalBadge = document.getElementById("goalBadge");
 const todayBadge = document.getElementById("todayBadge");
 const remainBadge = document.getElementById("remainBadge");
@@ -39,74 +39,162 @@ const progressText = document.getElementById("progressText");
 const goalInput = document.getElementById("goalInput");
 const setGoalBtn = document.getElementById("setGoalBtn");
 
-// ================= CALCULATIONS =================
-const goal = loadGoal(GOAL_KEY);
-const todayCal = calcTodayCalories(history);
-const streak = calcStreak(history);
+let history = [];
 
-const remaining = goal > 0 ? Math.max(goal - todayCal, 0) : 0;
-const pct = goal > 0 ? Math.min(Math.round((todayCal / goal) * 100), 100) : 0;
+// ======================================================
+// LOAD DATA FROM BACKEND
+// ======================================================
 
-// ================= RENDER CALORIE SUMMARY =================
-goalBadge.textContent = `Goal: ${goal > 0 ? goal : "--"} kcal`;
-todayBadge.textContent = `Today: ${todayCal} kcal`;
-remainBadge.textContent = `Remaining: ${goal > 0 ? remaining : "--"} kcal`;
-streakBadge.textContent = `Streak: ${streak} days`;
+document.addEventListener("DOMContentLoaded", loadDashboard);
 
-progressFill.style.width = `${pct}%`;
-progressText.textContent =
-  goal > 0 ? `${pct}% of daily goal completed` : "Set goal to track progress";
+async function loadDashboard() {
+  try {
+    const res = await authFetch(`${API_BASE}/api/history`);
+    if (!res || !res.ok) {
+      showToast("Failed to load dashboard", "error");
+      return;
+    }
 
-if (goal > 0) goalInput.value = goal;
+    history = await res.json();
+    renderDashboard(history);
 
-// ================= SET CALORIE GOAL =================
-setGoalBtn.addEventListener("click", () => {
-  const val = Number(goalInput.value || 0);
-  if (!val || val < 500)
-    return showToast("Enter valid goal (>= 500)", "error");
+  } catch (err) {
+    console.error(err);
+    showToast("Error loading dashboard", "error");
+  }
+}
 
-  localStorage.setItem(GOAL_KEY, String(val));
-  showToast("Goal updated ✅", "success");
-  setTimeout(() => location.reload(), 700);
-});
+// ======================================================
+// RENDER DASHBOARD
+// ======================================================
 
-// ================= CHARTS =================
-const labels = history
-  .slice(0, 15)
-  .reverse()
-  .map(s => new Date(s.timestamp).toLocaleDateString());
+function renderDashboard(history) {
 
-const calories = history
-  .slice(0, 15)
-  .reverse()
-  .map(s => Number(s.totals?.calories || 0));
+  const goal = loadGoal();
+  const todayCal = calcTodayCalories(history);
+  const streak = calcStreak(history);
 
-const scores = history
-  .slice(0, 15)
-  .reverse()
-  .map(s => Number(s.health_score || 0));
+  const remaining = goal > 0 ? Math.max(goal - todayCal, 0) : 0;
+  const pct = goal > 0
+    ? Math.min(Math.round((todayCal / goal) * 100), 100)
+    : 0;
 
-new Chart(document.getElementById("calChart"), {
-  type: "line",
-  data: {
-    labels,
-    datasets: [{ label: "Calories", data: calories, borderWidth: 2, tension: 0.3 }]
-  },
-  options: { responsive: true, scales: { y: { beginAtZero: true } } }
-});
+  goalBadge.textContent = `Goal: ${goal || "--"} kcal`;
+  todayBadge.textContent = `Today: ${todayCal} kcal`;
+  remainBadge.textContent = `Remaining: ${goal ? remaining : "--"} kcal`;
+  streakBadge.textContent = `Streak: ${streak} days`;
 
-new Chart(document.getElementById("scoreChart"), {
-  type: "line",
-  data: {
-    labels,
-    datasets: [{ label: "Health Score", data: scores, borderWidth: 2, tension: 0.3 }]
-  },
-  options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }
-});
+  progressFill.style.width = `${pct}%`;
+  progressText.textContent =
+    goal ? `${pct}% of daily goal completed`
+         : "Set goal to track progress";
 
-// ========================================================
-// ================= WATER TRACKER ========================
-// ========================================================
+  if (goal) goalInput.value = goal;
+
+  renderCharts(history);
+}
+
+// ======================================================
+// CALCULATIONS
+// ======================================================
+
+function loadGoal() {
+  return Number(localStorage.getItem(GOAL_KEY) || 0);
+}
+
+function calcTodayCalories(history) {
+  const today = new Date().toDateString();
+  return history
+    .filter(s => new Date(s.timestamp).toDateString() === today)
+    .reduce((sum, s) => sum + (s.totals?.calories || 0), 0);
+}
+
+function calcStreak(history) {
+  const dates = [...new Set(
+    history.map(s =>
+      new Date(s.timestamp).toDateString()
+    )
+  )];
+
+  let streak = 0;
+  let d = new Date();
+
+  while (dates.includes(d.toDateString())) {
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+
+  return streak;
+}
+
+// ======================================================
+// CHARTS
+// ======================================================
+
+function renderCharts(history) {
+
+  const recent = history.slice(0, 15).reverse();
+
+  const labels = recent.map(s =>
+    new Date(s.timestamp).toLocaleDateString()
+  );
+
+  const calories = recent.map(s =>
+    Number(s.totals?.calories || 0)
+  );
+
+  const scores = recent.map(s =>
+    Number(s.health_score || 0)
+  );
+
+  new Chart(document.getElementById("calChart"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label: "Calories",
+        data: calories,
+        borderWidth: 2,
+        tension: 0.3
+      }]
+    },
+    options: { responsive: true }
+  });
+
+  new Chart(document.getElementById("scoreChart"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label: "Health Score",
+        data: scores,
+        borderWidth: 2,
+        tension: 0.3
+      }]
+    },
+    options: { responsive: true }
+  });
+}
+
+// ======================================================
+// SET CALORIE GOAL
+// ======================================================
+
+if (setGoalBtn) {
+  setGoalBtn.addEventListener("click", () => {
+    const val = Number(goalInput.value || 0);
+    if (!val || val < 500)
+      return showToast("Enter valid goal (>= 500)", "error");
+
+    localStorage.setItem(GOAL_KEY, String(val));
+    showToast("Goal updated ✅", "success");
+    setTimeout(() => location.reload(), 700);
+  });
+}
+
+// ======================================================
+// WATER TRACKER (Still Local)
+// ======================================================
 
 function todayKey() {
   const d = new Date();
@@ -141,64 +229,4 @@ function updateWaterUI() {
     `Remaining: ${remain} ml`;
 }
 
-// ================= WATER BUTTONS =================
-const setWaterGoalBtn = document.getElementById("setWaterGoalBtn");
-const addWaterBtn = document.getElementById("addWaterBtn");
-const resetWaterBtn = document.getElementById("resetWaterBtn");
-const enableWaterNotifyBtn = document.getElementById("enableWaterNotifyBtn");
-
-if (setWaterGoalBtn) {
-  setWaterGoalBtn.addEventListener("click", () => {
-    const val = Number(document.getElementById("waterGoalInput").value || 0);
-    if (val < 500)
-      return showToast("Enter valid water goal (>= 500 ml)", "error");
-
-    localStorage.setItem(WATER_GOAL_KEY, String(val));
-    showToast("Water goal updated 💧", "success");
-    updateWaterUI();
-  });
-}
-
-if (addWaterBtn) {
-  addWaterBtn.addEventListener("click", () => {
-    let today = loadWaterData();
-    today += 250;
-    saveWaterData(today);
-    showToast("+250 ml added 💧", "success");
-    updateWaterUI();
-  });
-}
-
-if (resetWaterBtn) {
-  resetWaterBtn.addEventListener("click", () => {
-    saveWaterData(0);
-    showToast("Water reset for today", "info");
-    updateWaterUI();
-  });
-}
-
-// ================= WATER NOTIFICATION =================
-if (enableWaterNotifyBtn) {
-  enableWaterNotifyBtn.addEventListener("click", async () => {
-    if (!("Notification" in window)) {
-      return showToast("Notifications not supported", "error");
-    }
-
-    const permission = await Notification.requestPermission();
-
-    if (permission !== "granted") {
-      return showToast("Notification permission denied", "error");
-    }
-
-    showToast("Hydration reminder enabled 💧", "success");
-
-    setInterval(() => {
-      new Notification("DeepDiet Hydration Reminder 💧", {
-        body: "Time to drink water! Stay hydrated."
-      });
-    }, 60 * 60 * 1000); // every 1 hour
-  });
-}
-
-// Initialize water UI
 updateWaterUI();

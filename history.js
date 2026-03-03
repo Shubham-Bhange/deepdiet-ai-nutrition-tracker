@@ -1,3 +1,7 @@
+// ======================================================
+// DeepDiet - History Page (Backend Based)
+// ======================================================
+
 requireAuth();
 renderUserInfo();
 applyI18n();
@@ -19,19 +23,42 @@ if (logoutBtn) {
   });
 }
 
-// ✅ User-wise history key
-const HISTORY_KEY = userKey("deepdiet_history");
-
 // Elements
 const tbody = document.getElementById("historyTable");
 const searchInput = document.getElementById("searchInput");
 const filterScore = document.getElementById("filterScore");
 
-// Load data
-let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+let history = [];
 
-// Render function
+// ================= LOAD FROM BACKEND =================
+
+document.addEventListener("DOMContentLoaded", loadHistory);
+
+async function loadHistory() {
+  try {
+
+    const res = await authFetch(`${API_BASE}/api/history`);
+
+    if (!res || !res.ok) {
+      showToast("Failed to load history", "error");
+      return;
+    }
+
+    history = await res.json();
+    render(history);
+
+  } catch (err) {
+    console.error(err);
+    showToast("Error loading history", "error");
+  }
+}
+
+// ================= RENDER =================
+
 function render(list) {
+
+  if (!tbody) return;
+
   tbody.innerHTML = "";
 
   if (!list || list.length === 0) {
@@ -40,7 +67,11 @@ function render(list) {
   }
 
   list.forEach((s) => {
-    const dt = new Date(s.timestamp).toLocaleString();
+
+    const dt = s.timestamp
+      ? new Date(s.timestamp).toLocaleString()
+      : "--";
+
     const meal = s.meal_name || "Meal";
     const cal = s.totals?.calories ?? "--";
     const score = s.health_score ?? "--";
@@ -55,9 +86,9 @@ function render(list) {
       <td>${score}</td>
     `;
 
-    // click row -> open result
+    // Click row → open result
     tr.addEventListener("click", () => {
-      localStorage.setItem(userKey("deepdiet_current_scan"), String(s.id));
+      localStorage.setItem("deepdiet_current_scan", String(s.id));
       window.location.href = "result.html";
     });
 
@@ -65,8 +96,10 @@ function render(list) {
   });
 }
 
-// Apply filters
+// ================= FILTERS =================
+
 function applyFilters() {
+
   const q = (searchInput?.value || "").trim().toLowerCase();
   const scoreMin = filterScore?.value || "all";
 
@@ -82,7 +115,9 @@ function applyFilters() {
   // Filter by minimum score
   if (scoreMin !== "all") {
     const min = Number(scoreMin);
-    filtered = filtered.filter((s) => Number(s.health_score || 0) >= min);
+    filtered = filtered.filter((s) =>
+      Number(s.health_score || 0) >= min
+    );
   }
 
   render(filtered);
@@ -95,6 +130,3 @@ if (searchInput) {
 if (filterScore) {
   filterScore.addEventListener("change", applyFilters);
 }
-
-// Initial render
-render(history);
