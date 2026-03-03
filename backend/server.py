@@ -75,10 +75,19 @@ ACCESS_TOKEN_EXPIRE_DAYS = 7
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
+def safe_password(password: str) -> str:
+    # bcrypt max limit = 72 bytes
+    if isinstance(password, str):
+        password = password.encode("utf-8")[:72]
+        return password.decode("utf-8", errors="ignore")
+    return password
+
 def hash_password(password: str):
+    password = safe_password(password)
     return pwd_context.hash(password)
 
 def verify_password(plain, hashed):
+    plain = safe_password(plain)
     return pwd_context.verify(plain, hashed)
 
 def create_access_token(data: dict):
