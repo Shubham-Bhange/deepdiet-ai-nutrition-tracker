@@ -12,6 +12,8 @@ import io
 import os
 import json
 import re
+import time
+import asyncio
 
 # =====================================================
 # ENV VARIABLES
@@ -254,10 +256,39 @@ If unsure:
 Return JSON only.
 """
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",  # safer model
-            contents=[prompt, image]
-        )
+        models_to_try = [
+            "gemini-2.5-flash",   # Primary
+            "gemini-1.5-pro",     # Failsafe 1
+            "gemini-1.5-flash",   # Failsafe 2
+            "gemini-2.5-flash-lite" # Final Failsafe
+        ]
+
+        response = None
+        last_exception = None
+        max_retries = 2
+        
+        for model_name in models_to_try:
+            for attempt in range(max_retries):
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=[prompt, image]
+                    )
+                    break # Success!
+                except Exception as e:
+                    print(f"Model {model_name} failed on attempt {attempt + 1} ({e}).")
+                    last_exception = e
+                    if attempt < max_retries - 1:
+                        print("Retrying in 1 second...")
+                        await asyncio.sleep(1)
+            
+            if response:
+                break
+            else:
+                print(f"Model {model_name} exhausted all retries, using next fallback...")
+
+        if not response:
+            raise RuntimeError(f"All fallback models failed. Last error: {last_exception}")
 
         data = extract_json(response.text)
 
@@ -321,10 +352,39 @@ Meal Context:
 Give short, clear advice.
 """
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt
-    )
+    models_to_try = [
+        "gemini-2.5-flash",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-2.5-flash-lite"
+    ]
+
+    response = None
+    last_exception = None
+    max_retries = 2
+
+    for model_name in models_to_try:
+        for attempt in range(max_retries):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                break
+            except Exception as e:
+                print(f"Chat model {model_name} failed on attempt {attempt + 1} ({e}).")
+                last_exception = e
+                if attempt < max_retries - 1:
+                    print("Retrying in 1 second...")
+                    time.sleep(1)
+        
+        if response:
+            break
+        else:
+            print(f"Chat model {model_name} exhausted all retries, using next fallback...")
+
+    if not response:
+        raise RuntimeError(f"All chat fallback models failed. Last error: {last_exception}")
 
     return {"reply": response.text.strip()}
 
