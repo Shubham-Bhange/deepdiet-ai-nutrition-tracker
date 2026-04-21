@@ -258,6 +258,7 @@ Return JSON only.
 
         models_to_try = [
             "gemini-2.5-flash",   # Primary
+            "gemini-2.0-flash",   # Fallback
             "gemini-1.5-pro",     # Failsafe 1
             "gemini-1.5-flash",   # Failsafe 2
             "gemini-2.5-flash-lite" # Final Failsafe
@@ -272,7 +273,8 @@ Return JSON only.
                 try:
                     response = client.models.generate_content(
                         model=model_name,
-                        contents=[prompt, image]
+                        contents=[prompt, image],
+                        config={"response_mime_type": "application/json"}
                     )
                     break # Success!
                 except Exception as e:
@@ -354,6 +356,7 @@ Give short, clear advice.
 
     models_to_try = [
         "gemini-2.5-flash",
+        "gemini-2.0-flash",
         "gemini-1.5-pro",
         "gemini-1.5-flash",
         "gemini-2.5-flash-lite"
