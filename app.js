@@ -140,32 +140,19 @@ scanBtn.addEventListener("click", async () => {
 
     const dish = await geminiDishScan(currentFile);
 
-if (!dish || !dish.id) {
-  showToast("Invalid scan response.", "error");
-  return;
-}
+    if (!dish || !dish.id) {
+      showToast("Invalid scan response.", "error");
+      return;
+    }
 
-// ✅ USER-WISE KEY (VERY IMPORTANT)
-const HISTORY_KEY = userKey("deepdiet_history");
-const CURRENT_KEY = userKey("deepdiet_current_scan");
+    // Store only current scan ID (NOT full history)
+    localStorage.setItem("deepdiet_current_scan", dish.id);
 
-// Load old history
-let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+    showToast("Scan successful ✅", "success");
 
-// Add new scan at top
-history.unshift(dish);
-
-// Save updated history
-localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-
-// Save current scan ID (for result page)
-localStorage.setItem(CURRENT_KEY, String(dish.id));
-
-showToast("Scan successful ✅", "success");
-
-setTimeout(() => {
-  window.location.href = "result.html";
-}, 500);
+    setTimeout(() => {
+      window.location.href = "result.html";
+    }, 500);
 
   } catch (err) {
     console.error(err);
